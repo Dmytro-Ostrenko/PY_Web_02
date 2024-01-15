@@ -1,0 +1,6 @@
+setup.py
+Personal_Helper.egg-info/PKG-INFO
+Personal_Helper.egg-info/SOURCES.txt
+Personal_Helper.egg-info/dependency_links.txt
+Personal_Helper.egg-info/entry_points.txt
+Personal_Helper.egg-info/top_level.txt
