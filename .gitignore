@@ -1,0 +1,9 @@
+config.ini
+
+.idea/
+
+output/
+
+__pycache__/
+
+venv/
