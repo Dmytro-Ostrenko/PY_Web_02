@@ -1,10 +1,8 @@
-from datetime import datetime, timedelta
+from abc import ABC, abstractmethod
+from datetime import datetime
 import pickle
 from pathlib import Path
-from typing import List
-from abc import ABC, abstractmethod
-import FileSorter
-#import requests
+import sort
 
 class Contact:
     def __init__(self, name, address, phone, email, birthday):
@@ -15,15 +13,12 @@ class Contact:
         self.birthday = birthday
 
     def __str__(self):
-        return f"Name: {self.name} | Address: {self.address} | Phone number: {self.phone} | Email: {self.email} | Date of birth: {self.birthday}"
+        return f"Name: {self.name} | Adress: {self.address} | Phone number: {self.phone} | Email: {self.email} | Date of birth: {self.birthday}"
 
 class Note:
     def __init__(self, text):
         self.text = text
         self.tags = []
-
-    def __str__(self):
-        return f"Note: {self.text} | Tags: {', '.join(self.tags)}"
 
 class ContactManagerBase(ABC):
     @abstractmethod
@@ -38,22 +33,39 @@ class ContactManagerBase(ABC):
     def add_contact(self, name, address, phone, email, birthday):
         pass
 
-    @abstractmethod
-    def search_contacts(self, query):
-        pass
+class ContactManager(ContactManagerBase):
+    def __init__(self):
+        self.contacts = []
 
-    @abstractmethod
-    def edit_contact(self, old_contact_name, new_name, new_address, new_phone, new_email, new_birthday):
-        pass
+    def validate_phone(self, phone):
+        return phone.isdigit() and len(phone) == 10
 
-    @abstractmethod
-    def delete_contact(self, contact_name):
-        pass
+    def validate_email(self, email):
+        return '@' in email and '.' in email.split('@')[-1]
 
-    @abstractmethod
-    def show_all_contacts(self):
-        pass
+    def add_contact(self, name, address, phone, email, birthday):
+        while True:
+            if not name:
+                name = input("Name is obligatory, enter the name for a new contact: ")
+                continue
 
+            if not self.validate_phone(phone):
+                phone = input("Invalid phone number format. Please enter a 10-digit number: ")
+                continue
+
+            if not self.validate_email(email):
+                email = input("Invalid email format. Please enter email again: ")
+                continue
+            break
+
+        for contact in self.contacts:
+            if contact.name.lower() == name.lower() and contact.birthday.lower() == birthday.lower():
+                print(f"Contact with name '{name}' and birthday '{birthday}' already exists. Can not duplicate contact.")
+                return
+
+        contact = Contact(name, address, phone, email, birthday)
+        self.contacts.append(contact)
+        print("Contact added successfully.")
 
 class NoteManagerBase(ABC):
     @abstractmethod
@@ -80,104 +92,10 @@ class NoteManagerBase(ABC):
     def search_notes_by_tags(self, tags):
         pass
 
-    @abstractmethod
-    def show_all_notes(self):
-        pass
-
-
-class ContactManager(ContactManagerBase):
-    def __init__(self):
-        self.contacts = []
-
-    def validate_phone(self, phone):
-        return phone.isdigit() and len(phone) == 10
-
-    def validate_email(self, email):
-        return '@' in email and '.' in email.split('@')[-1]
-
-    def add_contact(self, name, address, phone, email, birthday):
-        while True:
-            if not name:
-                name = input("Name is obligatory, enter the name for the new contact: ")
-                continue
-
-            if not self.validate_phone(phone):
-                phone = input("Invalid phone number format. Please enter a 10-digit number: ")
-                continue
-
-            if not self.validate_email(email):
-                email = input("Invalid email format. Please enter the email again: ")
-                continue
-            break
-
-        for contact in self.contacts:
-            if contact.name.lower() == name.lower() and contact.birthday.lower() == birthday.lower():
-                print(f"Contact with name '{name}' and birthday '{birthday}' already exists. Cannot duplicate contact.")
-                return
-
-        contact = Contact(name, address, phone, email, birthday)
-        self.contacts.append(contact)
-        print("Contact added successfully.")
-
-    def search_contacts(self, query):
-        results = []
-        for contact in self.contacts:
-            if query.lower() in contact.name.lower():
-                results.append(contact)
-        return results
-
-    def edit_contact(self, old_contact_name, new_name, new_address, new_phone, new_email, new_birthday):
-        contact_found = False
-        while True:
-            if not new_name:
-                new_name = input("Name is obligatory, enter the name for the new contact: ")
-                continue
-
-            if not self.validate_phone(new_phone):
-                new_phone = input("Invalid phone number format. Please enter a 10-digit number: ")
-                continue
-
-            if not self.validate_email(new_email):
-                new_email = input("Invalid email format. Please enter the email again: ")
-                continue
-            break
-
-        for contact in self.contacts:
-            if contact.name.lower() == old_contact_name.lower():
-                contact_found = True
-                contact.name = new_name
-                if new_address is not None:
-                    contact.address = new_address
-                contact.phone = new_phone
-                contact.email = new_email
-                if new_birthday is not None:
-                    contact.birthday = new_birthday
-                break
-
-        if not contact_found:
-            return f'Contact not found'
-
-        return f'Contact {old_contact_name} successfully edited.'
-
-    def delete_contact(self, contact_name):
-        for contact in self.contacts:
-            if contact_name.lower() in contact.name.lower():
-                self.contacts.remove(contact)
-                print(f'{contact_name} removed')
-                break
-        else:
-            print("Contact not found.")
-
-    def show_all_contacts(self):
-        if self.contacts:
-            return "\n".join(map(str, self.contacts))
-        else:
-            return "Contact list is empty."
-
-
 class NoteManager(NoteManagerBase):
     def __init__(self):
         self.notes = {}
+        self.tags = {}
 
     def add_note(self, note_name, note_text):
         if note_name in self.notes:
@@ -239,22 +157,16 @@ class NoteManager(NoteManagerBase):
         sorted_results = sorted(results, key=lambda x: x.text)
         return sorted_results
 
-    def show_all_notes(self):
-        if self.notes:
-            return "\n".join(map(str, self.notes))
-        else:
-            return "Note list is empty."
-
-
-class BotAssist(ContactManager, NoteManager):
+class BotAssist:
     def __init__(self):
-        super().__init__()
+        self.contact_manager = ContactManager()
+        self.note_manager = NoteManager()
 
     def search_contacts_birthday(self, days):
         upcoming_birthday_contacts = []
         today = datetime.now()
 
-        for contact in self.contacts:
+        for contact in self.contact_manager.contacts:
             birthday_month, birthday_day = map(int, contact.birthday.split('-')[1:])
             birthday_date = datetime(today.year, birthday_month, birthday_day)
 
@@ -273,9 +185,21 @@ class BotAssist(ContactManager, NoteManager):
         else:
             print("No contacts with upcoming birthdays.")
 
+    def show_all_contacts(self):
+        if self.contact_manager.contacts:
+            return "\n".join(map(str, self.contact_manager.contacts))
+        else:
+            return "Contact list is empty."
+
+    def show_all_notes(self):
+        if self.note_manager.notes:
+            return "\n".join(map(str, self.note_manager.notes))
+        else:
+            return "Note list is empty."
+
     def save_data(self, filename="save.pickle"):
         with open(filename, "wb") as file:
-            data = {"contacts": self.contacts, "notes": self.notes}
+            data = {"contacts": self.contact_manager.contacts, "notes": self.note_manager.notes, "tags": self.note_manager.tags}
             pickle.dump(data, file)
         print("Data saved successfully.")
 
@@ -283,20 +207,21 @@ class BotAssist(ContactManager, NoteManager):
         try:
             with open(filename, 'rb') as file:
                 data = pickle.load(file)
-                self.contacts = data.get('contacts', [])
-                self.notes = data.get('notes', {})
+                self.contact_manager.contacts = data.get('contacts', [])
+                self.note_manager.notes = data.get('notes', {})
+                self.note_manager.tags = data.get('tags', {})
             print("Data loaded successfully.")
         except FileNotFoundError:
             print("File not found. No data loaded.")
 
     def sort_files(self, folder_path):
-        file_sorter = FileSorter(folder_path)
+        file_sorter = sort(folder_path)
         file_sorter.core()
         print("Folder is sorted successfully!")
 
     def main_menu(self):
         while True:
-            command = input("\nEnter your command (for menu-press 'menu'): ").lower()
+            command = input("\nEnter your command for start (for menu-press 'menu'): ").lower()
 
             if command == '1':
                 name = input('Enter your name:')
@@ -304,12 +229,12 @@ class BotAssist(ContactManager, NoteManager):
                 phone = input('Enter your phone (10-digits): ')
                 email = input('Enter your email:')
                 birthday = input('Enter your birthday in YYYY-MM-DD:')
-                self.add_contact(name, address, phone, email, birthday)
+                self.contact_manager.add_contact(name, address, phone, email, birthday)
 
             elif command == '2':
                 search_query = input("Enter first name or last name: ")
 
-                results = self.search_contacts(search_query)
+                results = self.contact_manager.search_contacts(search_query)
                 if results:
                     print("Search Results:")
                     for result in results:
@@ -322,11 +247,11 @@ class BotAssist(ContactManager, NoteManager):
                 if contact_name == '':
                     print("No contacts found.")
                 else:
-                    self.delete_contact(contact_name)
+                    self.contact_manager.delete_contact(contact_name)
 
             elif command == '4':
                 old_contact_name = input('Enter the contact old name you want to edit: ')
-                contact_exists = any(contact.name.lower() == old_contact_name.lower() for contact in self.contacts)
+                contact_exists = any(contact.name.lower() == old_contact_name.lower() for contact in self.contact_manager.contacts)
 
                 if not contact_exists:
                     print(f'Contact "{old_contact_name}" does not exist. Please, try again.')
@@ -338,7 +263,7 @@ class BotAssist(ContactManager, NoteManager):
                 new_email = input('Enter the new email: ')
                 new_birthday = input('Enter the new birthday in YYYY-MM-DD: ')
 
-                print(self.edit_contact(old_contact_name, new_name, new_address, new_phone, new_email, new_birthday))
+                print(self.contact_manager.edit_contact(old_contact_name, new_name, new_address, new_phone, new_email, new_birthday))
 
             elif command == '5':
                 day_to_birthday = int(input("Enter the number of days until the birthday: "))
@@ -347,11 +272,11 @@ class BotAssist(ContactManager, NoteManager):
             elif command == '6':
                 note_name = input("Enter note name: ")
                 note_text = input("Enter note text: ")
-                self.add_note(note_name, note_text)
+                self.note_manager.add_note(note_name, note_text)
 
             elif command == '7':
                 note_name = input("Enter note name to search: ")
-                self.search_notes(note_name)
+                self.note_manager.search_notes(note_name)
 
             elif command == '8':
                 edit_or_delete = input("Enter 'edit' to edit a note or 'delete' to delete a note: ").lower()
@@ -359,21 +284,21 @@ class BotAssist(ContactManager, NoteManager):
                 if edit_or_delete == 'edit':
                     note_name = input("Enter note name to edit: ")
                     new_text = input("Enter new text for the note: ")
-                    self.edit_note(note_name, new_text)
+                    self.note_manager.edit_note(note_name, new_text)
                 elif edit_or_delete == 'delete':
                     note_name = input("Enter note name to delete: ")
-                    self.delete_note(note_name)
+                    self.note_manager.delete_note(note_name)
                 else:
                     print("Invalid command. Please enter 'edit' or 'delete'.")
 
             elif command == '9':
                 title = input("Enter note name:")
                 new_tags = input("Enter tags:").split(",")
-                self.add_tags_to_note(title, new_tags)
-
+                self.note_manager.add_tags_to_note(title, new_tags)
+                
             elif command == "10":
                 tags = input("Enter tags for search (comma separated):").split(",")
-                results = self.search_notes_by_tags(tags)
+                results = self.note_manager.search_notes_by_tags(tags)
                 if results:
                     for result in results:
                         print(result.tags, "|", result.text)
@@ -382,10 +307,8 @@ class BotAssist(ContactManager, NoteManager):
 
             elif command == 'show all':
                 print(self.show_all_contacts())
-
             elif command == 'show all notes':
                 print(self.show_all_notes())
-
             elif command == "save":
                 filename = input("Enter the filename to save data: ")
                 self.save_data(filename)
@@ -399,21 +322,28 @@ class BotAssist(ContactManager, NoteManager):
                 self.sort_files(folder_path)
 
             elif command == 'menu':
-                print("\n---------------------------\nHello, I'm your 'Personal Assistant'.\nI save all information automatically. I can make the next command:\n---------------------------\n 1-add contact\n 2-search contact\n 3-delete contact\n 4-edit contact\n 5-find birthday\n 6-add note \n 7-search note \n 8-edit or delete note\n 9-add tag \n 10-search note by tag\n--------------------------- \n show all-Show all contacts \n show all notes-Show all notes \n sort-if you want to sort the folder\n save-if you want to save information handler\n load-if you want to continue with the previously saved information\n show all notes- Show all notes\n exit, close, end-if you want to exit\n---------------------------")
+                print("\n---------------------------\nHello, I'm your ' Personal Assistant '.\nI save all information automatically. I can make next command:\n---------------------------\n 1-add contact\n 2-search contact\n 3-delete contact\n 4-edit contact\n 5-find birthday\n 6-add note \n 7-search note \n 8-edit or delete note\n 9-add tag \n 10-search note by tag\n--------------------------- \n show all-Show all contacts \n show all notes-Show all notes \n sort-if you want sort folder\n save-if you want save information handler\n load-if you want to continue with the previously saved information\n show all notes- Show all notes\n exit, close, end-if you want exit\n---------------------------")
 
             elif command in ['end', 'close', 'exit']:
                 break
-
             else:
                 print("Invalid, Try Again:")
 
+    def save_data(self):
+        filename = input("Enter the filename to save data: ")
+        with open(filename, "wb") as file:
+            data = {"contacts": self.contact_manager.contacts, "notes": self.note_manager.notes, "tags": self.note_manager.tags}
+            pickle.dump(data, file)
+        print("Data saved successfully.")
+
+    def main(self):
+        self.main_menu()
         self.save_data()
 
 
 if __name__ == "__main__":
     try:
         assistant = BotAssist()
-        assistant.load_data()
-        assistant.main_menu()
+        assistant.main()
     except Exception as error:
         print(f"An error occurred: {error}")
